@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</head>
+<body>
+<div class="container mt-5">
+    <h1 class="mb-4">Todo List</h1>
+
+    <form id="addTaskForm" class="mb-4">
+        <div class="input-group">
+            <input type="text" id="taskTitle" class="form-control" placeholder="Enter task title" required>
+            <input type="text" id="taskDescription" class="form-control" placeholder="Enter task description" required>
+            <div class="input-group-append">
+                <button class="btn btn-primary" type="submit">Add Task</button>
+            </div>
+        </div>
+    </form>
+
+    <ul class="list-group mb-4" id="taskList">
+        {% for task in tasks %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span {% if task.completed %}class="text-decoration-line-through"{% endif %}>{{ task.title }}</span>
+            <span class="text-muted small">({{ task.description }})</span> <!-- Show description -->
+            <div>
+                {% if not task.completed %}
+                    <button class="btn btn-success btn-sm complete" data-id="{{ task.id }}">Complete</button>
+                    <button class="btn btn-warning btn-sm edit" data-id="{{ task.id }}" data-title="{{ task.title }}" data-description="{{ task.description }}">Edit</button>
+                    <button class="btn btn-danger btn-sm delete" data-id="{{ task.id }}">Delete</button>
+                {% endif %}
+                {% if task.completed %}
+                    <span class="badge badge-success">Completed</span> <!-- Completed badge -->
+                {% endif %}
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <button id="exportBtn" class="btn btn-secondary">Export Tasks</button>
+    <button id="importBtn" class="btn btn-secondary">Import Tasks</button>
+</div>
+
+<script>
+$(document).ready(function () {
+    // Add task
+    $('#addTaskForm').on('submit', function (e) {
+        e.preventDefault();
+        const title = $('#taskTitle').val();
+        const description = $('#taskDescription').val();
+
+        $.ajax({
+            type: "POST",
+            url: "/add",
+            contentType: "application/json",
+            data: JSON.stringify({ title: title, description: description, completed: false }),
+            success: function (data) {
+                alert("Task added successfully!");
+                location.reload();
+            },
+            error: function (xhr, status, error) {
+                alert("Error adding task: " + xhr.responseText);
+            }
+        });
+    });
+
+    // Mark task as complete
+    $('#taskList').on('click', '.complete', function () {
+        const id = $(this).data('id');
+        $.post(`/complete/${id}`, function () {
+            location.reload();
+        });
+    });
+
+    // Edit task
+    $('#taskList').on('click', '.edit', function () {
+        const id = $(this).data('id');
+        const title = $(this).data('title');
+        const description = $(this).data('description');
+        const newTitle = prompt("Edit task title:", title);
+        const newDescription = prompt("Edit task description:", description);
+        if (newTitle && newDescription) {
+            $.ajax({
+                type: "POST",
+                url: `/edit/${id}`,
+                contentType: "application/json",
+                data: JSON.stringify({ title: newTitle, description: newDescription, completed: false }),
+                success: function () {
+                    location.reload();
+                }
+            });
+        }
+    });
+
+    // Delete task
+    $('#taskList').on('click', '.delete', function () {
+        const id = $(this).data('id');
+        if (confirm("Are you sure you want to delete this task?")) {
+            $.post(`/delete/${id}`, function () {
+                location.reload();
+            });
+        }
+    });
+
+    // Export tasks
+    $('#exportBtn').on('click', function () {
+        $.post("/export", function (data) {
+            const blob = new Blob([data], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "tasks.json";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+    });
+
+    // Import tasks
+    $('#importBtn').on('click', function () {
+        const fileInput = $('<input type="file" accept=".json">');
+        fileInput.click().on('change', function () {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    const tasks = JSON.parse(event.target.result);
+                    $.ajax({
+                        type: "POST",
+                        url: "/import",
+                        contentType: "application/json",
+                        data: JSON.stringify(tasks),
+                        success: function () {
+                            alert("Tasks imported successfully!");
+                            location.reload();
+                        },
+                        error: function () {
+                            alert("Error importing tasks");
+                        }
+                    });
+                };
+                reader.readAsText(file);
+            }
+        });
+    });
+});
+</script>
+</body>
+</html>
